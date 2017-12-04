@@ -24,8 +24,11 @@ libraryDependencies ++= Seq(
   "org.json4s" %% "json4s-jackson" % "3.5.0",
   "io.circe" %% "circe-core" % "0.8.0",
   "io.circe" %% "circe-generic-extras" % "0.8.0",
-  "io.circe" %% "circe-parser" % "0.8.0"
+  "io.circe" %% "circe-parser" % "0.8.0",
+  "io.swagger" %% "swagger-scala-module" % "1.0.3"
 )
+
+
 
 
 
