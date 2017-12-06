@@ -8,8 +8,11 @@ import io.swagger.models.auth.ApiKeyAuthDefinition
 
 import scala.collection.JavaConverters._
 import io.swagger.models.auth.In
+import sbt.internal.util.ManagedLogger
 
 object MorpheusToSwagger {
+
+  var log: ManagedLogger = _
 
 
   def morpheusToSwagger(input: API, name: String, description: String, version: String): Swagger = {
@@ -35,7 +38,7 @@ object MorpheusToSwagger {
 
     val paths:Map[String,Path] = input.routes.map(route => {
 
-      println("processing route " + route.name.mkString(""))
+      log.info("processing route " + route.name.mkString(""))
       val operation = new Operation()
 
       operation.setOperationId(name + "__" +route.name.mkString("_"))
@@ -59,7 +62,6 @@ object MorpheusToSwagger {
 
 
       val path = new Path
-      println("method" + route.method)
       route.method match {
         case "post" => path.setPost(operation)
         case "get" => path.setGet(operation)
@@ -88,20 +90,17 @@ object MorpheusToSwagger {
     val descr = param.desc.getOrElse(name +" parameter")
     parameter.setName(name)
     parameter.setDescription(descr)
-    println("\t processing param "+  name + " " +param.tpe.toString)
+    log.info("\t processing param "+  name + " " +param.tpe.toString)
     val  typeName =param.tpe match {
       case n:Name =>  n.name
       case a:Apply => a.name
 
     }
 
-    if(typeName.contains("Option"))
-      parameter.setRequired(false)
-    else
-      parameter.setRequired(true)
+      parameter.setRequired(param.required)
 
 
-    param match {
+    parameter match {
       case sp: AbstractSerializableParameter[_] => {
         val swaggerParamType = typeName match  {
           case "Int" => Map("type" -> "integer", "format" -> "int32" )
@@ -119,6 +118,7 @@ object MorpheusToSwagger {
         sp.setFormat(swaggerParamType.getOrElse("format",""))
 
       }
+      case _ => println()
     }
 
     return parameter

@@ -19,9 +19,31 @@ object MetarpheusPlugin extends AutoPlugin {
     val metarpheusConfigPath = settingKey[String]("configPath")
     val metarpheusOutputFile = settingKey[String]("outputFile")
     val openApiOutputFile = settingKey[String]("swaggerFile")
-    val metarpheusWiro = settingKey[Boolean]("wiro")
     val metarpheusTargets =  settingKey[List[String]]("targets")
     val metarpheus = taskKey[Unit]("run metarpheus")
+
+
+    val apiName = settingKey[String]("API Name")
+    val apiVersion = settingKey[String]("API version")
+    val apiDescription = settingKey[String]("API Description")
+
+
+
+    lazy val baseMetaSettings: Seq[Def.Setting[_]] = Seq(
+
+      apiName in metarpheus := name.value + " API",
+      apiVersion in metarpheus := version.value,
+      apiDescription in metarpheus := description.value,
+      metarpheus := {
+        MorpheusToSwagger.log = streams.value.log
+        MetaBiz(metarpheusTargets.value,metarpheusOutputFile.value,openApiOutputFile.value,(apiName in metarpheus).value,(apiVersion in metarpheus).value,(apiDescription in metarpheus).value)
+      },
+      metarpheusTargets := List(new File(".").getCanonicalPath() +  "/src/main/scala"),
+      metarpheusOutputFile := "src/main/resources/metarpheus-api-spec.json",
+      openApiOutputFile := "src/main/resources/swagger.json"
+
+
+    )
 
 
   }
@@ -30,31 +52,21 @@ object MetarpheusPlugin extends AutoPlugin {
 
   override def trigger = allRequirements
 
+  override val projectSettings =
+    inConfig(Compile)(baseMetaSettings)
 
+  object MetaBiz {
 
-  override lazy val globalSettings = Seq(
-    metarpheusWiro := true,
-    metarpheusTargets := List(new File(".").getCanonicalPath() +  "/src/main/scala"),
-    metarpheusOutputFile := "src/main/resources/metarpheus-api-spec.json",
-    openApiOutputFile := "src/main/resources/swagger.json",
-    metarpheus := metarpheusTask.value,
-  )
-
-
-  lazy val metarpheusTask =
-    Def.task {
-      //println("Processing metarpheus verbose getCanonicalPath ")
-
-
+    def apply(targets:List[String],metarpheusOut:String,openApiOut:String, apiName:String, apiVersion:String,apiDescr:String ) = {
 
 
       implicit val parseConfig: Configuration = Configuration.default.withDefaults
-      val config = Config.default.copy(wiro = metarpheusWiro.value, verbose = false)
+      val config = Config.default.copy(wiro = true, verbose = false)
 
 
      // println("current config " + config)
 
-      val api = Metarpheus.run(metarpheusTargets.value, config)
+      val api = Metarpheus.run(targets, config)
 
     //  println("Api " + api )
 
@@ -62,22 +74,23 @@ object MetarpheusPlugin extends AutoPlugin {
 
 
 
-      val openApi = MorpheusToSwagger.morpheusToSwagger(api,"","","")
+
+
+      val openApi = MorpheusToSwagger.morpheusToSwagger(api,apiName,apiDescr,apiVersion)
 
 
       val serializedOpenAPI = repr.serializeOpenAPI(openApi)
 
 
-
   //    println(" \n ----- \n " + config)
 
-      writeFile(serializedAPI, metarpheusOutputFile.value)
+      writeFile(serializedAPI, metarpheusOut)
 
-      writeFile(serializedOpenAPI, openApiOutputFile.value)
+      writeFile(serializedOpenAPI, openApiOut)
 
     }
-
-  private def writeFile(serializedAPI: String, path: String) = {
+  }
+  def writeFile(serializedAPI: String, path: String) = {
     val f = new File(path)
     val p = new java.io.PrintWriter(f)
     try {
@@ -91,5 +104,8 @@ object MetarpheusPlugin extends AutoPlugin {
     case Left(a) => Some(a)
     case Right(_) => None
   }
+
+
+
 
 }
