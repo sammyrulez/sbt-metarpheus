@@ -5,7 +5,7 @@ organization := "org.github.sammyrulez"
 
 name := "sbt-metarpheus"
 
-version := "1.0.0-SNAPSHOT"
+version := "1.0.0"
 
 //scalaVersion := "2.10.4"
 

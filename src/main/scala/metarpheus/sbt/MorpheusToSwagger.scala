@@ -8,7 +8,7 @@ import io.swagger.models.auth.ApiKeyAuthDefinition
 
 import scala.collection.JavaConverters._
 import io.swagger.models.auth.In
-import io.swagger.models.properties.{AbstractProperty, MapProperty, StringProperty}
+import io.swagger.models.properties._
 import sbt.internal.util.ManagedLogger
 
 object MorpheusToSwagger {
@@ -67,12 +67,26 @@ object MorpheusToSwagger {
       val response: Response = new Response
 
       response.setDescription("Response for " + route.name.mkString("_"))
-       val schemaResponse = new AbstractProperty(){}
 
       val outputName = swaggerType(route.returns).getOrElse("type","string")
 
+
+      val schemaResponse = outputName match  {
+        case "array" => {
+          val itemRef = new RefProperty()
+          itemRef.set$ref( route.returns.asInstanceOf[Apply].args.head.asInstanceOf[Name].name)
+          new ArrayProperty().items(itemRef)
+        }
+        case "object" => {
+          val itemRef = new RefProperty()
+          itemRef.set$ref( route.returns.asInstanceOf[Name].name)
+          itemRef
+        }
+        case _ => new AbstractProperty(){}
+      }
+
       schemaResponse.setType(outputName)
-      response.setSchema(schemaResponse) //  TODO refs
+      response.setSchema(schemaResponse)
 
       operation.response(200,response)
 
@@ -90,7 +104,7 @@ object MorpheusToSwagger {
       model => {
         val impl = new ModelImpl()
         impl.setType("object")
-        model.asInstanceOf[CaseClass].members.foreach( memeber => impl.addProperty(memeber.name,new StringProperty().rename(memeber.name))) //TODO right types
+        model.asInstanceOf[CaseClass].members.foreach( member => impl.addProperty(member.name,new StringProperty().rename(member.name))) //TODO right types
         (model.name,impl)}
     }.toMap
 
@@ -103,9 +117,10 @@ object MorpheusToSwagger {
 
   def typeNameToSwaggerType(innerTypeName :String):Map[String,String] = {
 
-    println("typeNameToSwaggerType " +innerTypeName )
+
 
     innerTypeName match {
+      case "String" => Map("type" -> "string")
       case "Int" => Map("type" -> "integer", "format" -> "int32")
       case "Long" => Map("type" -> "integer", "format" -> "int64")
       case "Float" => Map("type" -> "number", "format" -> "float")
@@ -123,8 +138,18 @@ object MorpheusToSwagger {
     buildParameter(param,new QueryParameter).asInstanceOf[QueryParameter]
   }
 
-  private def buildBodyParameter(  param: RouteParam):BodyParameter = {
-    buildParameter(param,new BodyParameter).asInstanceOf[BodyParameter]
+  private def buildBodyParameter(  param: RouteParam):Parameter = {
+
+    swaggerType(param.tpe).getOrElse("type","string") match {
+      case "object" => {
+        val ref = new RefModel()
+        ref.set$ref(param.tpe.asInstanceOf[Name].name)
+        buildParameter(param,new BodyParameter).asInstanceOf[BodyParameter].schema(ref)
+      }
+
+      case _  =>  buildParameter(param,new QueryParameter).asInstanceOf[QueryParameter]
+    }
+
   }
 
 
@@ -136,8 +161,10 @@ object MorpheusToSwagger {
 
     }
 
+    log.info("\t processing typeName " +typeName)
 
     typeName match {
+        case "String" => Map("type" -> "string")
         case "Int" => Map("type" -> "integer", "format" -> "int32")
         case "Long" => Map("type" -> "integer", "format" -> "int64")
         case "Float" => Map("type" -> "number", "format" -> "float")
@@ -145,7 +172,7 @@ object MorpheusToSwagger {
         case "Date" => Map("type" -> "string", "format" -> "date")
         case "DateTime" => Map("type" -> "string", "format" -> "date-time")
         case "Boolean" => Map("type" -> "boolean")
-        case "Option" => typeNameToSwaggerType(tpe.toString)
+        case "Option" => Map("required" -> "false") ++ typeNameToSwaggerType(tpe.toString)
         case "List" => Map("type" -> "array")
         case _ => Map("type" -> "object")
       }
@@ -161,12 +188,6 @@ object MorpheusToSwagger {
     val descr = param.desc.getOrElse(name +" parameter")
     parameter.setName(name)
     parameter.setDescription(descr)
-    log.info("\t processing param "+  name + " " +param.tpe.toString)
-    val  typeName =param.tpe match {
-      case n:Name =>  n.name
-      case a:Apply => a.name
-
-    }
 
       parameter.setRequired(param.required)
 
